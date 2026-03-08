@@ -341,6 +341,13 @@ async function ensureAccess(req, res) {
 }
 
 app.use(express.static(publicDir));
+
+// Prevent browsers from caching JS/CSS so deploys always take effect immediately
+app.use(["/app.js", "/styles.css"], (req, res, next) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  next();
+});
+
 app.use("/api", applyRateLimit);
 
 app.get("/api/login", (req, res) => {
