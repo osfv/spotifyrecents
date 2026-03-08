@@ -1,4 +1,4 @@
-// ─── Element refs ─────────────────────────────────────────────────────────
+// ─── Element refs ─────────────────────────────────────────────────────────────
 const statusEl         = document.getElementById("status");
 const tracksEl         = document.getElementById("tracks");
 const refreshBtn       = document.getElementById("refresh");
@@ -19,7 +19,7 @@ const eqEl             = document.getElementById("eq");
 const nowPanelEl       = document.querySelector(".now-panel");
 const revealEls        = document.querySelectorAll(".reveal");
 
-// ─── State ───────────────────────────────────────────────────────────────
+// ─── State ─────────────────────────────────────────────────────────────────────
 let loadInFlight        = false;
 let cooldownUntil       = 0;
 let nowPlayingTicker    = null;
@@ -29,10 +29,9 @@ let currentNowSignature = "";
 let latestScroll        = 0;
 let scrollTicking       = false;
 
-// Mark JS available for reveal animations
 document.documentElement.classList.add("js");
 
-// ─── SVG snippets ────────────────────────────────────────────────────────
+// ─── SVG snippets ──────────────────────────────────────────────────────────────
 const spotifyIconSm = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
   <circle cx="12" cy="12" r="9"/>
   <path d="m6.5 10.1c3.7-1.1 7.5-.8 10.9.9"/>
@@ -47,7 +46,7 @@ const refreshIconSvg = `<svg class="btn-icon" width="16" height="16" viewBox="0 
   <path d="m4 12a8 8 0 0 0 13.6 5.6l2.4-2.6"/>
 </svg>`;
 
-// ─── Utilities ───────────────────────────────────────────────────────────
+// ─── Utilities ─────────────────────────────────────────────────────────────────
 function escapeHtml(str) {
   return String(str)
     .replaceAll("&", "&amp;")
@@ -64,6 +63,7 @@ function fmtTimestamp(iso) {
   const diffMin = Math.floor(diffMs / 60_000);
   const diffH   = Math.floor(diffMs / 3_600_000);
 
+  if (diffMin < 1)  return "just now";
   if (diffMin < 60) return `${diffMin}m ago`;
   if (diffH   < 24) return `${diffH}h ago`;
 
@@ -71,8 +71,6 @@ function fmtTimestamp(iso) {
     year:   "numeric",
     month:  "short",
     day:    "2-digit",
-    hour:   "2-digit",
-    minute: "2-digit",
   }).format(new Date(iso));
 }
 
@@ -103,7 +101,7 @@ function buildNowSignature(item) {
   ].join("|");
 }
 
-// ─── Network ─────────────────────────────────────────────────────────────
+// ─── Network ───────────────────────────────────────────────────────────────────
 async function fetchJson(url) {
   const res = await fetch(url, { credentials: "same-origin" });
 
@@ -119,34 +117,30 @@ async function fetchJson(url) {
   return { data: await res.json() };
 }
 
-// ─── Stats ───────────────────────────────────────────────────────────────
+// ─── Stats ─────────────────────────────────────────────────────────────────────
 function setStats(items, fetchedAt = null) {
-  const count   = items.length;
   const artists = new Set();
 
   for (const item of items) {
-    const value = String(item.artists || "");
-    for (const artist of value.split(",")) {
-      const normalized = artist.trim().toLowerCase();
-      if (normalized) artists.add(normalized);
+    for (const artist of String(item.artists || "").split(",")) {
+      const n = artist.trim().toLowerCase();
+      if (n) artists.add(n);
     }
   }
 
   let latest = null;
   for (const item of items) {
     const stamp = new Date(item.played_at).getTime();
-    if (!Number.isNaN(stamp) && (latest === null || stamp > latest)) {
-      latest = stamp;
-    }
+    if (!Number.isNaN(stamp) && (latest === null || stamp > latest)) latest = stamp;
   }
 
-  statTracksEl.textContent  = String(count);
+  statTracksEl.textContent  = String(items.length);
   statArtistsEl.textContent = String(artists.size);
-  statLastEl.textContent    = latest ? fmtDate(new Date(latest).toISOString()) : "none";
+  statLastEl.textContent    = latest ? fmtTimestamp(new Date(latest).toISOString()) : "none";
   statUpdatedEl.textContent = fetchedAt ? fmtDate(fetchedAt) : "\u2014";
 }
 
-// ─── Reveal observer ─────────────────────────────────────────────────────
+// ─── Reveal observer ───────────────────────────────────────────────────────────
 function setupRevealObserver() {
   if (!("IntersectionObserver" in window)) {
     for (const el of revealEls) el.classList.add("is-visible");
@@ -168,7 +162,7 @@ function setupRevealObserver() {
   for (const el of revealEls) observer.observe(el);
 }
 
-// ─── Scroll motion ───────────────────────────────────────────────────────
+// ─── Scroll motion ─────────────────────────────────────────────────────────────
 function applyScrollMotion() {
   document.documentElement.style.setProperty("--scroll", String(latestScroll));
   scrollTicking = false;
@@ -182,7 +176,7 @@ function onScroll() {
   }
 }
 
-// ─── Progress ticker ─────────────────────────────────────────────────────
+// ─── Progress ticker ───────────────────────────────────────────────────────────
 function setNowProgress(progressMs, durationMs) {
   const safeDuration = Math.max(0, Number(durationMs || 0));
   const safeProgress = Math.min(
@@ -210,26 +204,23 @@ function stopProgressTicker() {
 
 function startProgressTicker() {
   stopProgressTicker();
-  if (!nowPlaybackState || !nowPlaybackState.isPlaying) return;
+  if (!nowPlaybackState?.isPlaying) return;
 
   progressTicker = setInterval(() => {
-    if (!nowPlaybackState || !nowPlaybackState.isPlaying) {
-      stopProgressTicker();
-      return;
-    }
+    if (!nowPlaybackState?.isPlaying) { stopProgressTicker(); return; }
     const elapsed      = Date.now() - nowPlaybackState.anchorAt;
     const nextProgress = nowPlaybackState.anchorProgress + elapsed;
     setNowProgress(nextProgress, nowPlaybackState.duration);
   }, 1000);
 }
 
-// ─── Render: track list ──────────────────────────────────────────────────
+// ─── Render: track list ────────────────────────────────────────────────────────
 function renderTracks(items, fetchedAt) {
   setStats(items, fetchedAt);
   tracksEl.classList.add("refreshing");
 
   if (!items.length) {
-    window.setTimeout(() => {
+    setTimeout(() => {
       tracksEl.innerHTML = "";
       tracksEl.classList.remove("refreshing");
     }, 180);
@@ -239,44 +230,45 @@ function renderTracks(items, fetchedAt) {
 
   statusEl.textContent = `showing ${items.length} recent tracks`;
 
-  window.setTimeout(() => {
-    tracksEl.innerHTML = items
-      .map((item, index) => {
-        const idx = String(index + 1).padStart(2, "0");
+  setTimeout(() => {
+    tracksEl.innerHTML = items.map((item, index) => {
+      const idx = String(index + 1).padStart(2, "0");
 
-        const coverHtml = item.album_image
-          ? `<img class="track-cover" src="${escapeHtml(item.album_image)}" alt="album cover" loading="lazy" />`
-          : `<div class="track-cover-placeholder" aria-hidden="true"></div>`;
+      const coverHtml = item.album_image
+        ? `<img class="track-cover" src="${escapeHtml(item.album_image)}" alt="album cover" loading="lazy" />`
+        : `<div class="track-cover track-cover--empty" aria-hidden="true"></div>`;
 
-        const linkHtml = item.external_url
-          ? `<a class="track-link" href="${escapeHtml(item.external_url)}" target="_blank" rel="noreferrer">${spotifyIconSm} open in spotify</a>`
-          : "";
+      const linkHtml = item.external_url
+        ? `<a class="track-link" href="${escapeHtml(item.external_url)}" target="_blank" rel="noreferrer">${spotifyIconSm} open in spotify</a>`
+        : "";
 
-        return `
-          <li class="track-row" style="--i:${index};">
-            <span class="track-index">${escapeHtml(idx)}</span>
-            ${coverHtml}
-            <div class="track-meta">
-              <p class="track-name">${escapeHtml(item.track_name)}</p>
-              <p class="track-sub">${escapeHtml(item.artists)} &bull; ${escapeHtml(item.album)}</p>
-              <p class="track-sub track-timestamp">${escapeHtml(fmtTimestamp(item.played_at))}</p>
-              ${linkHtml}
-            </div>
-          </li>
-        `;
-      })
-      .join("");
+      return `
+        <li class="track-row" style="--i:${index};">
+          <span class="track-index">${escapeHtml(idx)}</span>
+          ${coverHtml}
+          <div class="track-meta">
+            <p class="track-name">${escapeHtml(item.track_name)}</p>
+            <p class="track-sub">${escapeHtml(item.artists)} &bull; ${escapeHtml(item.album)}</p>
+            <p class="track-sub track-timestamp">${escapeHtml(fmtTimestamp(item.played_at))}</p>
+            ${linkHtml}
+          </div>
+        </li>`;
+    }).join("");
 
     tracksEl.classList.remove("refreshing");
   }, 180);
 }
 
-// ─── Render: now playing ─────────────────────────────────────────────────
+// ─── Render: now playing ───────────────────────────────────────────────────────
 function renderNowPlaying(data) {
   const item      = data?.item;
   const isPlaying = Boolean(data?.is_playing && item);
   const signature = buildNowSignature(item);
 
+  if (signature !== currentNowSignature) {
+    nowPanelEl.classList.add("now-changing");
+    setTimeout(() => nowPanelEl.classList.remove("now-changing"), 520);
+  }
   currentNowSignature = signature;
 
   if (!item) {
@@ -289,6 +281,7 @@ function renderNowPlaying(data) {
     setNowProgress(0, 0);
     nowLinkEl.classList.add("hidden");
     eqEl.classList.add("eq-off");
+    eqEl.classList.remove("eq-on");
     nowPanelEl.classList.remove("now-playing");
     return;
   }
@@ -298,8 +291,8 @@ function renderNowPlaying(data) {
   nowArtistsEl.textContent = item.artists     || "unknown";
   nowAlbumEl.textContent   = item.album       || "unknown";
 
-  const progress = Number(data.progress_ms || 0);
-  const duration = Number(item.duration_ms || 0);
+  const progress = Number(data.progress_ms   || 0);
+  const duration = Number(item.duration_ms   || 0);
   setNowProgress(progress, duration);
 
   if (item.external_url) {
@@ -311,6 +304,7 @@ function renderNowPlaying(data) {
 
   if (isPlaying) {
     eqEl.classList.remove("eq-off");
+    eqEl.classList.add("eq-on");
     nowPanelEl.classList.add("now-playing");
     nowPlaybackState = {
       isPlaying:      true,
@@ -321,6 +315,7 @@ function renderNowPlaying(data) {
     startProgressTicker();
   } else {
     eqEl.classList.add("eq-off");
+    eqEl.classList.remove("eq-on");
     nowPanelEl.classList.remove("now-playing");
     stopProgressTicker();
     nowPlaybackState = {
@@ -332,7 +327,7 @@ function renderNowPlaying(data) {
   }
 }
 
-// ─── UI states ───────────────────────────────────────────────────────────
+// ─── UI states ─────────────────────────────────────────────────────────────────
 function showDisconnected() {
   tracksEl.innerHTML = "";
   stopProgressTicker();
@@ -343,10 +338,10 @@ function showDisconnected() {
 }
 
 function showError() {
-  statusEl.textContent = "failed to load data";
+  statusEl.textContent = "failed to load data \u2014 try refreshing";
 }
 
-// ─── Button cooldown ─────────────────────────────────────────────────────
+// ─── Button cooldown ───────────────────────────────────────────────────────────
 function setButtonCooldown(seconds = 2.5) {
   cooldownUntil = Date.now() + Math.floor(seconds * 1000);
 }
@@ -373,7 +368,7 @@ function updateRefreshButton() {
   refreshBtn.innerHTML = `${refreshIconSvg} refresh`;
 }
 
-// ─── Load now playing (background poll) ───────────────────────────────────
+// ─── Load now playing (background poll) ────────────────────────────────────────
 async function loadNowPlaying({ silent = false } = {}) {
   try {
     const result = await fetchJson("/api/now-playing");
@@ -389,12 +384,12 @@ async function loadNowPlaying({ silent = false } = {}) {
     }
 
     renderNowPlaying(result.data);
-  } catch (error) {
-    if (!silent) console.error(error);
+  } catch (err) {
+    if (!silent) console.error(err);
   }
 }
 
-// ─── Load all ──────────────────────────────────────────────────────────────
+// ─── Load all ──────────────────────────────────────────────────────────────────
 async function loadAll() {
   if (loadInFlight) return;
 
@@ -419,10 +414,7 @@ async function loadAll() {
     }
 
     if (recentResult.rateLimited || nowResult.rateLimited) {
-      const seconds = Math.max(
-        recentResult.retryAfter || 1,
-        nowResult.retryAfter   || 1
-      );
+      const seconds = Math.max(recentResult.retryAfter || 1, nowResult.retryAfter || 1);
       statusEl.textContent = `rate limited \u2014 retry in ${seconds}s`;
       setButtonCooldown(seconds);
       return;
@@ -432,14 +424,11 @@ async function loadAll() {
     renderNowPlaying(nowResult.data || null);
 
     if (nowPlayingTicker) clearInterval(nowPlayingTicker);
+    nowPlayingTicker = setInterval(() => loadNowPlaying({ silent: true }), 25_000);
 
-    nowPlayingTicker = setInterval(() => {
-      loadNowPlaying({ silent: true });
-    }, 25_000);
-
-  } catch (error) {
+  } catch (err) {
     showError();
-    console.error(error);
+    console.error(err);
   } finally {
     loadInFlight = false;
     if (Date.now() >= cooldownUntil) setButtonCooldown(2.5);
@@ -447,10 +436,8 @@ async function loadAll() {
   }
 }
 
-// ─── Bootstrap ───────────────────────────────────────────────────────────
-refreshBtn.addEventListener("click", () => {
-  loadAll();
-});
+// ─── Bootstrap ─────────────────────────────────────────────────────────────────
+refreshBtn.addEventListener("click", loadAll);
 
 setupRevealObserver();
 onScroll();
